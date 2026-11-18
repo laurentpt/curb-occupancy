@@ -1,0 +1,13 @@
+# data & run outputs (large, may contain plates/faces)
+workdir/
+*.MP4
+*.mp4
+*.THM
+*.LRV
+
+# python
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+*.pt

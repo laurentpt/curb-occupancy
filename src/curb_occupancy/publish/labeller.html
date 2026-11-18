@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Curb labeller</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --hair: #e1e0d9; --border: rgba(11,11,11,0.10); --accent: #2a78d6; --chip: #f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --hair: #2c2c2a; --border: rgba(255,255,255,0.10); --accent: #3987e5; --chip: #2c2c2a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --hair: #2c2c2a; --border: rgba(255,255,255,0.10); --accent: #3987e5; --chip: #2c2c2a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--ink); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+       display: grid; grid-template-rows: auto 1fr auto; }
+header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 16px;
+         background: var(--surface); border-bottom: 1px solid var(--border); }
+header h1 { font-size: 16px; margin: 0; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; padding: 5px 10px; background: transparent; color: var(--ink-2); font: inherit; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.btn { border: 1px solid var(--border); background: var(--chip); color: var(--ink); border-radius: 6px;
+       padding: 5px 10px; font: inherit; cursor: pointer; }
+.btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+#status { color: var(--ink-2); }
+#status.dirty { color: #d03b3b; }
+.help { color: var(--muted); font-size: 12px; flex-basis: 100%; }
+#scroller { overflow-x: auto; overflow-y: auto; position: relative; background: #111; }
+#canvas { position: relative; user-select: none; cursor: crosshair; }
+.ruler { position: relative; height: 30px; background: var(--surface); border-bottom: 1px solid var(--hair); }
+.tick { position: absolute; top: 0; width: 1px; background: var(--ink-2); }
+.tick span { position: absolute; top: 12px; left: 3px; font-size: 11px; color: var(--ink); white-space: nowrap;
+             font-variant-numeric: tabular-nums; }
+.inter { position: absolute; top: 0; bottom: 0; background: rgba(137,135,129,.35); }
+.inter span { position: absolute; top: 1px; left: 3px; font-size: 10px; color: var(--ink-2); white-space: nowrap; }
+.band { position: relative; height: 10px; background: var(--surface); }
+.blk { position: absolute; top: 2px; height: 6px; background: #eb6834; opacity: .8; }
+.strip { position: relative; }
+.strip .imgs { display: flex; }
+.strip img { display: block; flex: none; image-rendering: auto; }
+.strip .name { position: sticky; left: 0; display: inline-block; z-index: 3; font-size: 11px; color: #fff;
+               background: rgba(0,0,0,.6); padding: 1px 6px; margin-top: 2px; pointer-events: none; }
+.strip .name-wrap { position: absolute; top: 0; left: 0; right: 0; height: 0; }
+.cars { position: relative; height: 7px; background: #222; }
+.car { position: absolute; top: 1px; height: 5px; background: #c3c2b7; border-radius: 1px; }
+.overlay { position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; }
+.cand { position: absolute; top: 40px; bottom: 0; border: 1px dashed rgba(255,214,0,.85); }
+.lab { position: absolute; top: 30px; bottom: 0; pointer-events: auto; cursor: pointer;
+       border-left: 2px solid; border-right: 2px solid; }
+.lab .tag { position: absolute; top: 1px; left: 2px; font-size: 11px; color: #fff; padding: 0 4px;
+            border-radius: 3px; white-space: nowrap; }
+.lab.sel { outline: 2px solid #fff; outline-offset: -1px; }
+.lab .h { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.lab .h.l { left: -5px; } .lab .h.r { right: -5px; }
+footer { max-height: 22vh; overflow: auto; background: var(--surface); border-top: 1px solid var(--border); padding: 8px 16px; }
+footer table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+footer td, footer th { padding: 2px 12px 2px 0; text-align: left; }
+footer th { color: var(--muted); font-weight: 600; font-size: 12px; }
+footer tr { cursor: pointer; }
+footer tr:hover td { background: var(--chip); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Curb labeller</h1>
+  <span class="seg" id="rows" role="group" aria-label="Parking row"></span>
+  <span class="seg" id="kinds" role="group" aria-label="Kind of new labels"></span>
+  <span class="seg" role="group" aria-label="Zoom">
+    <button id="zout" title="Zoom out (Ctrl+wheel)">−</button><button id="zlab" disabled style="cursor:default"></button><button id="zin" title="Zoom in (Ctrl+wheel)">+</button>
+  </span>
+  <label><input type="checkbox" id="showcand" checked> gap candidates</label>
+  <button class="btn primary" id="save">Save</button>
+  <span id="status"></span>
+  <div class="help">Drag across the strips to draw a zone (ends at the curb-cut edges). Click a zone to select it,
+    drag its edges to adjust, Delete removes it, N adds a note, 1–4 change its kind. Wheel scrolls along the street.
+    Strips: near views first (curb-cut markings on the ground in front of the row), then far views from the
+    opposite curb (driveways, garages). Grey bars under a strip: cars parked in that pass. Orange band: not
+    parkable per the current regulations. Dashed yellow: never-occupied gaps between parked cars (hints only).</div>
+</header>
+<div id="scroller"><div id="canvas"></div></div>
+<footer><table id="list"></table></footer>
+<script>
+const D = /*__DATA__*/null;
+const KINDS = {
+  driveway:    {label: "Driveway", color: "#1baf7a"},
+  reserved:    {label: "Reserved", color: "#6250d6"},
+  no_parking:  {label: "No parking", color: "#eb6834"},
+  no_stopping: {label: "No stopping", color: "#d03b3b"},
+};
+const S = D.px_per_m, CM = D.chunk_m, STRIP_H = Math.round((D.y_m[1] - D.y_m[0]) * S);
+const rowIds = Object.keys(D.rows);
+let row = rowIds[0], kind = "driveway", zoom = 1, sel = null, dirty = false;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+document.getElementById("title").textContent = `Curb labeller · ${D.street || D.run}`;
+
+// ---- labels <-> street axis: lat/lon at the curb is authoritative, axis metres per row
+function llAt(R, x) {
+  const c = R.curb_ll, i = Math.max(0, Math.min(c.ll.length - 2, Math.floor((x - c.x0) / c.step)));
+  const t = Math.max(0, Math.min(1, (x - c.x0) / c.step - i)), a = c.ll[i], b = c.ll[i + 1];
+  return [+(a[0] + (b[0] - a[0]) * t).toFixed(7), +(a[1] + (b[1] - a[1]) * t).toFixed(7)];
+}
+function xAt(R, ll) {
+  // nearest curb sample, refined on the neighbouring segment; null when > 15 m away
+  const c = R.curb_ll, k = Math.cos(ll[0] * Math.PI / 180) * 111320, m = 110540;
+  let best = 1e18, bi = -1;
+  c.ll.forEach((p, i) => { const d = ((p[0] - ll[0]) * m) ** 2 + ((p[1] - ll[1]) * k) ** 2; if (d < best) { best = d; bi = i; } });
+  if (best > 15 * 15) return null;
+  let x = c.x0 + bi * c.step, bestd = best;
+  for (const j of [bi - 1, bi]) {
+    if (j < 0 || j + 1 >= c.ll.length) continue;
+    const a = c.ll[j], b = c.ll[j + 1];
+    const ax = (b[1] - a[1]) * k, ay = (b[0] - a[0]) * m, px = (ll[1] - a[1]) * k, py = (ll[0] - a[0]) * m;
+    const t = Math.max(0, Math.min(1, (px * ax + py * ay) / (ax * ax + ay * ay || 1)));
+    const d = (px - t * ax) ** 2 + (py - t * ay) ** 2;
+    if (d <= bestd) { bestd = d; x = c.x0 + (j + t) * c.step; }
+  }
+  return x;
+}
+// working set: {kind, curb, x0, x1, note, row}
+let labels = [];
+function loadLabels(zones) {
+  labels = [];
+  for (const z of zones || []) {
+    if (!z.latlon || z.latlon.length < 2) continue;
+    for (const [rid, R] of Object.entries(D.rows)) {
+      if (z.curb && z.curb !== R.curb) continue;
+      const a = xAt(R, z.latlon[0]), b = xAt(R, z.latlon[z.latlon.length - 1]);
+      if (a == null || b == null) continue;
+      labels.push({kind: z.kind, curb: R.curb, x0: Math.min(a, b), x1: Math.max(a, b), note: z.note || "", row: rid});
+      break;
+    }
+  }
+}
+function toZones() {
+  return labels.map(l => {
+    const R = D.rows[l.row];
+    return {kind: l.kind, curb: R.curb, latlon: [llAt(R, l.x0), llAt(R, l.x1)],
+            axis_m: [+l.x0.toFixed(1), +l.x1.toFixed(1)], note: l.note || undefined};
+  });
+}
+
+// ---- draft in this browser (unsaved work survives a reload)
+const DRAFT = `curb-labels-draft:${D.run}`;
+function saveDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(toZones())); } catch (e) {} }
+function dropDraft() { try { localStorage.removeItem(DRAFT); } catch (e) {} }
+function setDirty(v) {
+  dirty = v;
+  const s = document.getElementById("status");
+  s.className = v ? "dirty" : "";
+  s.textContent = v ? "Unsaved changes" : (D.labels_file ? `Saved to ${D.labels_file}` : "No labels file configured: Save downloads YAML");
+  if (v) saveDraft();
+}
+
+// ---- drawing
+const canvas = document.getElementById("canvas"), scroller = document.getElementById("scroller");
+const R = () => D.rows[row];
+const px = x => (x - R().x0) * S * zoom;
+const xm = p => R().x0 + p / (S * zoom);
+let overlay;
+function render() {
+  const r = R(), W = Math.ceil(Math.ceil((r.x1 - r.x0) / CM) * CM * S * zoom);
+  canvas.style.width = W + "px";
+  let h = `<div class="ruler">`;
+  for (const [a, b, name] of r.intersections)
+    h += `<div class="inter" style="left:${px(a)}px;width:${px(b) - px(a)}px"><span>${esc(name.replace(/^(Avenue|Boulevard|Rue) (de |d')?/, ""))}</span></div>`;
+  const step = zoom < 0.5 ? 25 : 5;
+  for (let x = Math.ceil(r.x0 / step) * step; x <= r.x1; x += step) {
+    const big = x % 25 === 0;
+    h += `<div class="tick" style="left:${px(x)}px;height:${big ? 12 : 6}px">${big ? `<span>${x}</span>` : ""}</div>`;
+  }
+  h += `</div><div class="band">` + r.blocked.map(([a, b, s]) =>
+    `<div class="blk" title="${esc(s)}" style="left:${px(a)}px;width:${px(b) - px(a)}px"></div>`).join("") + `</div>`;
+  for (const s of r.strips) {
+    h += `<div class="strip"><div class="name-wrap"><span class="name">${esc(s.label)} · ${s.plane} view · ${esc(s.dir)}</span></div><div class="imgs">` +
+      s.chunks.map(c => `<img loading="lazy" src="${c.src}" width="${Math.round(px(c.x0 + CM) - px(c.x0))}" height="${Math.round(STRIP_H * zoom)}" alt="">`).join("") +
+      `</div><div class="cars">` + s.cars.map(([a, b]) => `<div class="car" style="left:${px(a)}px;width:${px(b) - px(a)}px"></div>`).join("") + `</div></div>`;
+  }
+  h += `<div class="overlay" id="overlay"></div>`;
+  canvas.innerHTML = h;
+  overlay = document.getElementById("overlay");
+  drawLabels();
+}
+function drawLabels() {
+  const r = R();
+  let h = "";
+  if (document.getElementById("showcand").checked)
+    h += r.candidates.map(([a, b]) => `<div class="cand" style="left:${px(a)}px;width:${px(b) - px(a)}px"></div>`).join("");
+  labels.forEach((l, i) => {
+    if (l.row !== row) return;
+    const k = KINDS[l.kind] || {color: "#898781", label: l.kind};
+    h += `<div class="lab${sel === i ? " sel" : ""}" data-i="${i}" style="left:${px(l.x0)}px;width:${Math.max(2, px(l.x1) - px(l.x0))}px;` +
+      `border-color:${k.color};background:${k.color}33"><span class="tag" style="background:${k.color}">${esc(k.label)} ${(l.x1 - l.x0).toFixed(1)} m${l.note ? " · " + esc(l.note) : ""}</span>` +
+      `<div class="h l" data-i="${i}" data-e="x0"></div><div class="h r" data-i="${i}" data-e="x1"></div></div>`;
+  });
+  overlay.innerHTML = h;
+  list();
+}
+function list() {
+  const rows = labels.map((l, i) => [l, i]).sort((a, b) => a[0].row.localeCompare(b[0].row) || a[0].x0 - b[0].x0);
+  document.getElementById("list").innerHTML = `<tr><th>Row</th><th>Kind</th><th>From (m)</th><th>To (m)</th><th>Length</th><th>Note</th></tr>` +
+    rows.map(([l, i]) => `<tr data-i="${i}"><td>${esc(l.row)}</td><td><span class="sw" style="background:${(KINDS[l.kind] || {}).color}"></span>${esc((KINDS[l.kind] || {}).label || l.kind)}</td>` +
+      `<td>${l.x0.toFixed(1)}</td><td>${l.x1.toFixed(1)}</td><td>${(l.x1 - l.x0).toFixed(1)} m</td><td>${esc(l.note)}</td></tr>`).join("") +
+    (labels.length ? "" : `<tr><td colspan="6" style="color:var(--muted)">No labels yet.</td></tr>`);
+}
+document.getElementById("list").addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-i]");
+  if (!tr) return;
+  const l = labels[+tr.dataset.i];
+  if (l.row !== row) setRow(l.row);
+  sel = +tr.dataset.i; drawLabels();
+  scroller.scrollLeft = px((l.x0 + l.x1) / 2) - scroller.clientWidth / 2;
+});
+
+// ---- interaction: drag to draw, edges to resize
+let drag = null;
+canvas.addEventListener("mousedown", e => {
+  if (e.button !== 0) return;
+  const rect = canvas.getBoundingClientRect(), x = xm(e.clientX - rect.left);
+  const hd = e.target.closest(".h"), lab = e.target.closest(".lab");
+  if (hd) { sel = +hd.dataset.i; drag = {mode: "edge", i: sel, e: hd.dataset.e}; }
+  else if (lab) { sel = +lab.dataset.i; drag = null; drawLabels(); return; }
+  else {
+    labels.push({kind, curb: R().curb, x0: x, x1: x, note: "", row});
+    sel = labels.length - 1; drag = {mode: "new", i: sel, a: x};
+  }
+  e.preventDefault();
+  drawLabels();
+});
+window.addEventListener("mousemove", e => {
+  if (!drag) return;
+  const rect = canvas.getBoundingClientRect(), x = Math.round(xm(e.clientX - rect.left) * 10) / 10;
+  const l = labels[drag.i];
+  if (drag.mode === "new") { l.x0 = Math.min(drag.a, x); l.x1 = Math.max(drag.a, x); }
+  else { l[drag.e] = x; if (l.x0 > l.x1) [l.x0, l.x1] = [l.x1, l.x0]; drag.e = l.x0 === x ? "x0" : "x1"; }
+  drawLabels();
+});
+window.addEventListener("mouseup", () => {
+  if (!drag) return;
+  const l = labels[drag.i];
+  if (drag.mode === "new" && l.x1 - l.x0 < 0.5) { labels.splice(drag.i, 1); sel = null; }
+  else setDirty(true);
+  drag = null; drawLabels();
+});
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (sel != null && (e.key === "Delete" || e.key === "Backspace")) { labels.splice(sel, 1); sel = null; setDirty(true); drawLabels(); e.preventDefault(); }
+  else if (sel != null && (e.key === "n" || e.key === "N")) {
+    const v = prompt("Note for this zone (address, photo id…)", labels[sel].note || "");
+    if (v != null) { labels[sel].note = v.trim(); setDirty(true); drawLabels(); }
+  } else if ("1234".includes(e.key) && e.key.length === 1) {
+    const k = Object.keys(KINDS)[+e.key - 1];
+    if (sel != null) { labels[sel].kind = k; setDirty(true); drawLabels(); } else setKind(k);
+  } else if (e.key === "Escape") { sel = null; drawLabels(); }
+  else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { scroller.scrollLeft += (e.key === "ArrowRight" ? 1 : -1) * scroller.clientWidth * .8; e.preventDefault(); }
+});
+scroller.addEventListener("wheel", e => {
+  if (e.ctrlKey) {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect(), x = xm(e.clientX - rect.left);
+    setZoom(zoom * (e.deltaY < 0 ? 1.25 : 0.8), x, e.clientX - scroller.getBoundingClientRect().left);
+  } else if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    e.preventDefault(); scroller.scrollLeft += e.deltaY;
+  }
+}, {passive: false});
+
+// ---- controls
+function setZoom(z, xKeep, screenX) {
+  if (xKeep == null) xKeep = xm(scroller.scrollLeft + scroller.clientWidth / 2);
+  if (screenX == null) screenX = scroller.clientWidth / 2;
+  zoom = Math.max(0.15, Math.min(3, z));
+  document.getElementById("zlab").textContent = `${Math.round(S * zoom)} px/m`;
+  render();
+  scroller.scrollLeft = px(xKeep) - screenX;
+}
+document.getElementById("zin").onclick = () => setZoom(zoom * 1.25);
+document.getElementById("zout").onclick = () => setZoom(zoom * 0.8);
+document.getElementById("showcand").onchange = drawLabels;
+function setRow(r) {
+  row = r; sel = null;
+  document.querySelectorAll("#rows button").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === r));
+  render(); scroller.scrollLeft = 0;
+}
+function setKind(k) {
+  kind = k;
+  document.querySelectorAll("#kinds button").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === k));
+}
+document.getElementById("rows").innerHTML = rowIds.map(r =>
+  `<button data-r="${r}">Row ${r} · ${D.rows[r].curb} curb · ${Math.round(D.rows[r].x0)}–${Math.round(D.rows[r].x1)} m</button>`).join("");
+document.querySelectorAll("#rows button").forEach(b => b.onclick = () => setRow(b.dataset.r));
+document.getElementById("kinds").innerHTML = Object.entries(KINDS).map(([k, v], i) =>
+  `<button data-k="${k}" title="key ${i + 1}"><span class="sw" style="background:${v.color}"></span>${v.label}</button>`).join("");
+document.querySelectorAll("#kinds button").forEach(b => b.onclick = () => setKind(b.dataset.k));
+
+function download() {
+  const lines = ["zones:", ...toZones().map(z => "  - " + JSON.stringify(z))];
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], {type: "text/yaml"}));
+  a.download = "curb_labels.yaml"; a.click();
+}
+document.getElementById("save").onclick = async () => {
+  if (!location.protocol.startsWith("http") || !D.labels_file) { download(); return; }
+  try {
+    const r = await fetch("api/labels", {method: "POST", headers: {"Content-Type": "application/json"},
+                                         body: JSON.stringify({zones: toZones()})});
+    if (!r.ok) throw new Error((await r.json()).error || r.status);
+    setDirty(false); dropDraft();
+  } catch (err) {
+    document.getElementById("status").textContent = `Save failed (${err.message}); downloading YAML instead`;
+    download();
+  }
+};
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+// ---- start: server copy (fresh), else the copy baked into the page; a local draft wins
+(async () => {
+  let zones = D.labels;
+  if (location.protocol.startsWith("http")) {
+    try { const r = await fetch("api/labels"); if (r.ok) zones = (await r.json()).zones; } catch (e) {}
+  }
+  loadLabels(zones);
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem(DRAFT) || "null"); } catch (e) {}
+  setKind(kind);
+  setRow(row);
+  setZoom(1, R().x0, 0);
+  if (draft && JSON.stringify(draft) !== JSON.stringify(toZones()) &&
+      confirm("Restore unsaved labels from your last session in this browser?")) {
+    loadLabels(draft); setDirty(true); drawLabels();
+  } else setDirty(false);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Conda provides the interpreter and system binaries (ffmpeg with NVDEC); Python packages are
+# pinned in requirements.lock.txt and installed with pip by `make env`.
+name: curb-occupancy
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - ffmpeg=6.1.2
+  - pip

@@ -1,0 +1,12 @@
+# GoPro HERO8 Black: Wide lens, HyperSmooth ("HS") EIS on, 4:3, recorded at 1920x1440.
+# `camera.rig: gopro_hero8_wide_hseis` in a street config merges these under its `camera`.
+# Use the lens profile that matches the clip's metadata (eis_mode, lens_fov): another EIS mode
+# or field of view needs its own rig directory.
+camera:
+  # Gyroflow lens profile database (github.com/gyroflow/lens_profiles, CC0-1.0):
+  # "GoPro_HERO8 Black_Wide_HS EIS_4k_4by3", calibrated by Eddy. Path relative to this file.
+  lens_profile: lens.json
+  rs_readout_s: 0.011        # rolling-shutter readout (GPMF SROT)
+  # telemetry-parser normalized_imu() axes -> OpenCV camera frame (x right, y down, z
+  # forward): v_cv = (-y, -x, -z); verified by levelling frames (2026-10-22)
+  imu_to_cv: [[0, -1, 0], [-1, 0, 0], [0, 0, -1]]

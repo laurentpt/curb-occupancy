@@ -1,0 +1,18 @@
+# Direct dependencies (unpinned intent). The resolved, pinned set is requirements.lock.txt.
+--extra-index-url https://download.pytorch.org/whl/cu118
+# torch 2.7.x is the last series with cu118 wheels; the host driver (470.x) caps CUDA at 11.4,
+# and cu118 runs on it through CUDA 11 minor-version compatibility.
+torch==2.7.1+cu118
+torchvision==0.22.1+cu118
+transformers==5.22.1   # D-FINE detector (Hugging Face; Apache-2.0)
+opencv-python-headless
+numpy
+scipy
+pandas
+matplotlib
+pyyaml
+telemetry-parser
+pyproj
+pytest
+# optional, not installed: `pip install ultralytics` for detect.backend: yolo (AGPL-3.0;
+# the YOLO11-L interim results of 2026-10-31)
