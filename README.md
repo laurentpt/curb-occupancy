@@ -11,7 +11,8 @@ an occupancy-study guideline (here the City of Montreal's).
 Everything specific to that street, city and camera sits in config (the study repository,
 [ndg-terrebonne-parking-2026][study], `config/`), a city adapter (`adapters/montreal.py`)
 and a rig profile (`rigs/gopro_hero8_wide_hseis/`); the rest is generic in intent but untested
-on any other street, city or camera.
+on any other street, city or camera. The study's map:
+<https://laurentpt.github.io/ndg-terrebonne-parking-2026/>.
 
 [study]: https://github.com/laurentpt/ndg-terrebonne-parking-2026
 
